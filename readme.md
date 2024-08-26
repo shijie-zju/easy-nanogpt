@@ -1,4 +1,4 @@
-# try-nanoGPT
+# easy-nanoGPT
 
 关于nanoGPT的学习和仿写
 
