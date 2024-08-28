@@ -5,7 +5,7 @@ from model.nanogpt import Nanogpt_LM, NanogptConfig
 
 # hyperparameters超参数
 # 1.data
-dataset = 'shakespare_char'
+dataset = 'shakespeare_char'
 gradient_accumulation_steps = 5 #梯度累计步数5*8（几轮才更一次梯度）
 batch_size = 16 #每轮批次维度：每次送入网络的独立序列数64
 block_size = 32 #时间维度：序列输入的最大字符长度256

@@ -18,7 +18,7 @@ eval_iters = 200 #一轮验证所取的样本数量200
 # 2.system
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 # 3.data
-dataset = 'shakespare_char'
+dataset = 'shakespeare_char'
 gradient_accumulation_steps = 5 #梯度累计步数5*8（几轮才更一次梯度）
 batch_size = 16 #每轮批次维度：每次送入网络的独立序列数64
 block_size = 16 #时间维度：序列输入的最大字符长度256
@@ -241,7 +241,59 @@ while True:
     if iter_num > max_iters:
         break
 
+print(f'6.结果记录')
+import pandas as pd
+from datetime import datetime
 
+def read_dataframe_from_csv(filename):#读取csv文件
+    try:
+        df = pd.read_csv(filename)
+        print(f"从 '{filename}' 成功读取DataFrame。")
+        return df
+    except Exception as e:
+        print(f"读取文件 '{filename}' 时出错: {e}")
+        return None
+def save_dataframe_to_csv(df, filename):
+    df.to_csv(filename, index=False)
+    print(f"DataFrame已保存到 '{filename}'。")
 
+csv_file = os.path.join('out', 'log_train.csv')
 
+# 读取csv文件,检查文件是否存在没有就创建
+if os.path.exists(csv_file):
+    # 尝试读取CSV文件
+    try:
+        df_read = pd.read_csv(csv_file)
+    except Exception as e:
+        print(f"读取文件 '{csv_file}' 时出错: {e}")
+        df_read = None  # 确保在发生错误时df_read为None
+else:
+    print(f"文件 '{csv_file}' 不存在。创建新文件。")
+    df_read = pd.DataFrame()  # 创建一个空的DataFrame
+# 如果df_read是None或者为空的DataFrame，初始化一个新的DataFrame
+if df_read is None or df_read.empty:
+    print("创建新的DataFrame。")
+    df_read = pd.DataFrame(columns=['time', 'out_dir', 'init_from', 'gra_acc_steps', 'batch_size', 'block_size', 'max_iters', 'learning_rate', 'n_embd', 'n_head', 'n_layer', 'loss'])
 
+now = datetime.now()
+# 格式化时间输出为 年-月-日 时:分:秒
+formatted_now = now.strftime("%Y-%m-%d %H:%M:%S")
+# 构建DataFrame
+data = {
+    'time': formatted_now,
+    'out_dir': config['out_dir'],
+    'init_from': config['init_from'],
+    'gra_acc_steps': config['gradient_accumulation_steps'],
+    'batch_size': config['batch_size'],
+    'block_size': config['block_size'],
+    'max_iters': config['max_iters'],
+    'learning_rate': config['learning_rate'],
+    'n_embd': config['n_embd'],
+    'n_head': config['n_head'],
+    'n_layer': config['n_layer'],
+    'loss': loss.item()
+}
+new_row = pd.DataFrame(data, index=[0])
+df_read = pd.concat([df_read, new_row], ignore_index=True)
+print(df_read.tail(5))
+save_dataframe_to_csv(df_read, csv_file)

@@ -21,7 +21,7 @@ n.还在开发更新中...
 pip install torch numpy transformers datasets tiktoken wandb tqdm
 ```
 
-#### 训练一个能跑就行、胡言乱语的gpt迷你版本
+#### A.训练一个能跑就行、胡言乱语的gpt迷你版本
 准备数据：
 
 ```sh
@@ -31,7 +31,7 @@ python data/shakespeare_char/prepare.py
 训练小模型：
 
 ```sh
-python train.py config/train_nanogpt_shakespearchar_cpu.py --max_iters=1000 --n_embd=64
+python train.py config/train_nanogpt_shakespearechar_cpu.py --max_iters=1000 --n_embd=64
 ```
 
 试试效果：
@@ -42,7 +42,7 @@ python sample.py --file_name=ckpt_1000.pt --num_samples=3
 
 (val loss ~ 3.20)
 
-#### 训练一个稍微正规、能说人话的gpt进阶版本
+#### B.训练一个稍微正规、能说人话的gpt进阶版本
 准备数据：
 
 ```sh
@@ -52,9 +52,8 @@ python data/shakespeare_char/prepare.py
 训练小模型：
 
 ```sh
-python train.py config/train_nanogpt_shakespearchar_cpu.py
+python train.py config/train_nanogpt_shakespearechar_cpu.py
 ```
-
 
 试试效果：
 
@@ -63,6 +62,27 @@ python sample.py --file_name=ckpt_5000.pt --num_samples=3
 ```
 
 (val loss ~ 2.00)
+
+#### C.训练一个吐词清晰、单词级别的gpt进阶版本
+准备数据：
+
+```sh
+python data/shakespeare_word/prepare.py
+```
+
+训练小模型：
+
+```sh
+python train.py config/train_nanogpt_shakespeareword_cpu.py 
+```
+
+试试效果：
+
+```sh
+python sample.py --out_dir=out/shakespeare_word --file_name=ckpt_5000.pt --num_samples=3
+```
+
+(val loss ~ 6.20)
 
 ### 文件介绍
 train.py：模型训练文件
