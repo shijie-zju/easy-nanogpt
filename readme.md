@@ -1,4 +1,4 @@
-# try-nanoGPT
+# Easy-NanoGPT
 
 这是关于nanoGPT的学习和改写项目，支持更多情形下的可调控训练场景。
 
@@ -15,9 +15,11 @@ n.还在开发更新中...
 参考链接： https://github.com/karpathy/nanoGPT
 
 ### 快速开始
-安装相关包
+安装相关包：
 
-`pip install torch numpy transformers datasets tiktoken wandb tqdm`
+```sh
+pip install torch numpy transformers datasets tiktoken wandb tqdm
+```
 
 #### 训练一个能跑就行、胡言乱语的gpt迷你版本
 准备数据：
