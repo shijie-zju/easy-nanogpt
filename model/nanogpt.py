@@ -116,12 +116,17 @@ class Nanogpt_LM(nn.Module):
 
         return logits, loss
 
-    def generate(self, idx, max_new_tokens): #idx [4,8]
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None): #idx [4,8]
         '''根据输入前向传播后的概率结果采样出新生成的字符，并更新延长输入'''
         for _ in range(max_new_tokens):
-            idx_cond = idx[:, -self.config.block_size:] #[B,<=T] 输入超过最大block_size需裁剪否则位置编码会失效
+            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:] #[B,<=T] 输入超过最大block_size需裁剪否则位置编码会失效
             logits, loss = self(idx_cond) #前向传播 logits [B,T,C]
-            logits = logits[:,-1,:] #[B,T,C]->[B,C] 取最后一个字符判概率
+            logits = logits[:,-1,:] / temperature #[B,T,C]->[B,C] 取最后一个字符判概率
+            if top_k is not None:
+                #取概率最大的min（前k个，所有个），其他概率置为无概率
+                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
+                logits[logits < v[:, [-1]]] = -float('Inf')
+
             probs = F.softmax(logits,dim=-1) # [B,C] 得到最后一个字符在词表上的各概率
             idx_next = torch.multinomial(probs,num_samples=1) #[B,1] 按照随机种子进行概率采样，得到最后一字符的预测标号
             idx = torch.cat((idx,idx_next),dim=1) #[B,T+1]

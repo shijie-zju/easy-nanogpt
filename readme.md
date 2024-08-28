@@ -1,10 +1,53 @@
-# easy-nanoGPT
+# try-nanoGPT
 
-关于nanoGPT的学习和仿写
+这是关于nanoGPT的学习和改写项目，支持更多情形下的可调控训练场景。
+
+通过该项目，你可以体验
+
+1.自己准备数据集，并基于已有数据从头训练一个小规模的chatgpt
+
+2.在已有模型基础上进行训练
+
+3.调用已训练好的模型进行推理
+
+n.还在开发更新中...
+
+参考链接： https://github.com/karpathy/nanoGPT
 
 ### 快速开始
+安装相关包
 
+`pip install torch numpy transformers datasets tiktoken wandb tqdm`
 
+#### 训练一个能跑就行、胡言乱语的gpt迷你版本
+准备数据：
+
+`python data/shakespeare_char/prepare.py `
+
+训练小模型：
+
+`python train.py config/train_nanogpt_shakespearchar_cpu.py --max_iters=1000 --n_embd=64`
+
+试试效果：
+
+`python sample.py --file_name=ckpt_5000.pt --num_samples=3`
+
+(val loss ~ 3.20)
+
+#### 训练一个稍微正规、能说人话的gpt进阶版本
+准备数据：
+
+`python data/shakespeare_char/prepare.py`
+
+训练小模型：
+
+`python train.py config/train_nanogpt_shakespearchar_cpu.py`
+
+试试效果：
+
+`python sample.py --file_name=ckpt_5000.pt --num_samples=3`
+
+(val loss ~ 2.00)
 
 ### 文件介绍
 train.py：模型训练文件
@@ -30,7 +73,7 @@ data/：路径下保存了不同的训练数据集
 
 其中（1）-（4）为参数被参考设定的优先级，如（1）会将（2）重写；
 
-**总结为：脚本设定参数 > 脚本指定参数配置文件 > 开头参数初始化 > class config网络默认参数**
+**总结为：脚本设定参数(还有检查点处保存的模型参数) > 脚本指定参数配置文件 > 开头参数初始化 > class config网络默认参数**
 
 ①**train.py前几行** 会进行全体参数的初始化，定义为全局变量（3）
 

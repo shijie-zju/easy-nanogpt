@@ -2,14 +2,17 @@
 import os.path
 import pickle
 import math
+import time
+
 import numpy as np
 import torch
 from model.nanogpt import Nanogpt_LM, NanogptConfig
 
 # hyperparameters超参数
 # 1.I/O
-out_dir = 'out' #模型输出路径
+out_dir = 'out/shakespeare_char' #模型输出路径
 init_from = 'scratch' #模型训练从头还是从检查点 'scratch' or 'resume' or 'gpt2*'
+always_save_checkpoint = True #如果true则每次验证时不管loss是不是最小，都保存检查点
 
 eval_iters = 200 #一轮验证所取的样本数量200
 # 2.system
@@ -20,13 +23,18 @@ gradient_accumulation_steps = 5 #梯度累计步数5*8（几轮才更一次梯�
 batch_size = 16 #每轮批次维度：每次送入网络的独立序列数64
 block_size = 16 #时间维度：序列输入的最大字符长度256
 # 4.optimizer
-max_iters = 5000 #训练迭代数5000
-eval_interval = 100 #验证迭代数500
+max_iters = 1000 #训练迭代数5000
+eval_interval = 50 #验证迭代数(保存检查点)500
 learning_rate = 1e-3 #学习率3e-4
 weight_decay = 1e-1 #权重衰减
+beta1 = 0.9
+beta2 = 0.95
+
 # 5.learning rate
+whether_decay_lr = True #True则衰减学习率
 warmup_iters = 2000 #热身
-lr_decay_iters = 600000
+lr_decay_iters = max_iters# should be ~= max_iters per Chinchilla
+
 min_lr = 6e-5
 # 6.model
 n_embd = 64 #嵌入层维数384
@@ -80,11 +88,14 @@ if os.path.exists(meta_path):
     with open(meta_path, 'rb') as f:
         #pickle: pkl文件是序列化 Python 对象的二进制文件
         meta = pickle.load(f)
+    meta_data_size = meta['data_size']
     meta_vocab_size = meta['vocab_size']
     print(f'数据路径为{meta_path}')
-    print(f'数据集的元数据中词表大小vocab_size:{meta_vocab_size}')
+    print(f'数据集的元数据中，规模为：{meta_data_size}词表大小vocab_size:{meta_vocab_size}')
 
-print('3. 模型参数配置与模型实例化')
+iter_num = 0
+best_val_loss = 1e9
+print('3. 模型超参数配置与模型实例化')
 #将模型参数统一为model_args的字典 目的是后续方便重写其中的值，最后结果重写入model中的初始化类中
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout)
@@ -136,21 +147,19 @@ elif init_from.startswith('gpt2'):
 #     model_args['block_size'] = block_size
 
 model.to(device) #模型放在设备上
-
 print(f'模型当前运行在{device}')
 print(sum(p.numel() for p in model.parameters())/1e6, 'M parameters参数量')
 
 print('4.AdamW优化器与学习率')
 #optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-optimizer = model.configure_optimizers(weight_decay, learning_rate)
+optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device)
 #如果是检查点继续，则优化器需要用检查点的，然后至此检查点的内存就可以释放了
 if init_from == 'resume':
     optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None
 print(f'初始学习率learning_rate:{learning_rate},衰减weight_decay:{weight_decay}')
 print(f'warmup_iters:{warmup_iters},lr_decay_iters:{lr_decay_iters},min_lr:{lr_decay_iters}')
-#⑨学习率衰减调度器
-# learning rate decay scheduler (cosine with warmup)
+#⑨学习率衰减调度器(带预热的余弦)，获取learning_rate
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < warmup_iters:
@@ -164,7 +173,8 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-#损失计算函数
+print('5.训练training loop')
+#损失计算函数(eval_iters)
 @torch.no_grad()
 def estimate_loss():
     out = {}
@@ -179,39 +189,59 @@ def estimate_loss():
     model.train()
     return out
 
+X, Y = get_batch('train') #第一次数据抓取
+t0 = time.time()
 
-
-for iter in range(max_iters):
-    if iter % eval_interval == 0 or iter == max_iters-1:
+#一大轮是gradient_accumulation_steps次数据抓取利用、正反向传播，1次梯度更新
+while True:
+    #设置学习率，遍历优化器中的参数组，寻找lr参数并修正更新
+    lr = get_lr(iter_num) if whether_decay_lr else learning_rate
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+    #每隔eval_interval，评估损失, 保存检查点
+    if iter_num % eval_interval == 0:
         losses = estimate_loss()
-        t_loss = losses['train']
-        v_loss = losses['val']
-        print(f'step {iter}: train loss {t_loss:.4f}, val loss {v_loss:.4f}')
+        train_loss = losses['train']
+        val_loss = losses['val']
+        print(f'step {iter_num}: train loss {train_loss:.4f}, val loss {val_loss:.4f}, lr {lr}')
 
-    #每轮都随机抓取[B,T]数据进行训练
-    xb, yb = get_batch('train')
+        #如果验证时发现损失小于最佳损失 或 设置为总是保存检查点
+        if losses['val'] < best_val_loss or always_save_checkpoint:
+            best_val_loss = losses['val'] #这里理解是，如果每次都保存检查点，每次都知道loss，best记录的是当前的也无所谓了
+            if iter_num > 0:
+                checkpoint = {
+                    'model': model.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'model_args': model_args,
+                    'iter_num': iter_num,
+                    'best_val_loss': best_val_loss,
+                    'config': config,
+                }
+                print(f'保存检查点至 {out_dir}')
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt_' + str(iter_num) + '.pt'))
 
-    #正向传播、损失计算与反向更新
-    logits, loss = model(xb, yb)
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
+    #gradient_accumulation_steps次 前向后向传播，数据抓取
+    for micro_step in range(gradient_accumulation_steps):
+        logits, loss = model(X, Y)
+        loss = loss / gradient_accumulation_steps
+        loss.backward()
+        # 下一轮数据准备
+        X, Y = get_batch('train')
+
+    #1次 梯度更新
     optimizer.step()
+    optimizer.zero_grad(set_to_none=True)
 
-#print(f'数据集长度:{vocab_size},嵌入层大小:{n_embd}\n学习率:{learning_rate},最大训练轮数:{max_iters},每轮训练序列样本数:{batch_size},损失计算间隔:{eval_interval}')
-context = torch.zeros((1,1), dtype=torch.long, device=device)
-#print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
+    #计时
+    t1 = time.time()
+    dt = t1 - t0
+    t0 = t1
 
-'''
-上述总结：
-1.加载数据集
-2.创建字符级词表
-3.构建词-整数映射表
-4.按照映射表编码数据集
-5.网络设计
-外1层：控制文本最大长度blocksize，每个样本为随机采样blocksize长输入idx，标签为blocksize长的targets（相比idx后移了一个字符）
-2层：循环将编码文本idx按定长输入网络，输出长度为idx+1的文本继续输入网络
-3层：idx文本作为输入，targets可作标签计算损失
-'''
+    iter_num += 1
+    if iter_num > max_iters:
+        break
+
+
 
 
 

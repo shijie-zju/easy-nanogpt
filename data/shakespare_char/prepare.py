@@ -1,4 +1,5 @@
 
+#下载数据集，保存为train.bin和val.bin，并构建meta.pkl存储元信息
 import os
 import pickle
 import requests
