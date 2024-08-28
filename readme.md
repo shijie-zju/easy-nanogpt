@@ -1,4 +1,4 @@
-# Easy-NanoGPT
+# try-nanoGPT
 
 这是关于nanoGPT的学习和改写项目，支持更多情形下的可调控训练场景。
 
