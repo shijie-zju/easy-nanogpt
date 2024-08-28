@@ -22,30 +22,43 @@ n.还在开发更新中...
 #### 训练一个能跑就行、胡言乱语的gpt迷你版本
 准备数据：
 
-`python data/shakespeare_char/prepare.py `
+```sh
+python data/shakespeare_char/prepare.py
+```
 
 训练小模型：
 
-`python train.py config/train_nanogpt_shakespearchar_cpu.py --max_iters=1000 --n_embd=64`
+```sh
+python train.py config/train_nanogpt_shakespearchar_cpu.py --max_iters=1000 --n_embd=64
+```
 
 试试效果：
 
-`python sample.py --file_name=ckpt_5000.pt --num_samples=3`
+```sh
+python sample.py --file_name=ckpt_1000.pt --num_samples=3
+```
 
 (val loss ~ 3.20)
 
 #### 训练一个稍微正规、能说人话的gpt进阶版本
 准备数据：
 
-`python data/shakespeare_char/prepare.py`
+```sh
+python data/shakespeare_char/prepare.py
+```
 
 训练小模型：
 
-`python train.py config/train_nanogpt_shakespearchar_cpu.py`
+```sh
+python train.py config/train_nanogpt_shakespearchar_cpu.py
+```
+
 
 试试效果：
 
-`python sample.py --file_name=ckpt_5000.pt --num_samples=3`
+```sh
+python sample.py --file_name=ckpt_5000.pt --num_samples=3
+```
 
 (val loss ~ 2.00)
 
